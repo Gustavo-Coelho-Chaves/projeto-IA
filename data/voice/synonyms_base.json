@@ -1,0 +1,17 @@
+{
+  "actions": {
+    "comprar": ["comprar", "adicionar", "colocar", "inserir", "botar", "por no carrinho"],
+    "listar": ["listar", "mostrar", "exibir", "ver carrinho", "carrinho"],
+    "remover": ["remover", "tirar", "apagar", "excluir", "deletar"],
+    "finalizar": ["finalizar", "encerrar", "fechar", "terminar", "finalizar compra", "sair"]
+  },
+  "products": {
+    "arroz": ["arroz"],
+    "feijao": ["feijao", "feijão"],
+    "oleo": ["oleo", "óleo"],
+    "ervilha": ["ervilha", "ervilhas"]
+  },
+  "phrases": {
+    "repeat_last": ["repetir ultimo", "repetir o ultimo", "mesmo produto", "repete o ultimo"]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "authorized_user": "dono",
+  "verify_threshold": 0.75,
+  "samples": 3,
+  "products": ["arroz", "feijao", "oleo", "ervilha"]
+}

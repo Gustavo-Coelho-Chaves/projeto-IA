@@ -1,0 +1,7 @@
+speechrecognition
+pyaudio
+torch
+torchaudio
+speechbrain>=1.0.0
+numpy
+pyannote.audio
