@@ -1,0 +1,31 @@
+{
+  "produtos": [
+    {
+      "id": 1,
+      "nome": "arroz",
+      "preco": 5.99,
+      "quantidade": 50
+    }
+  ],
+  "usuarios": [
+    {
+      "nome": "joao",
+      "nivel_acesso": "usuario"
+    }
+  ],
+  "vendas": [
+    {
+      "id": 1,
+      "usuario": "joao",
+      "itens": [
+        {
+          "produto": "arroz",
+          "quantidade": 2,
+          "preco_unitario": 5.99,
+          "subtotal": 11.98
+        }
+      ],
+      "total": 11.98
+    }
+  ]
+}
