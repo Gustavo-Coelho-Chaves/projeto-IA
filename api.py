@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional, Union
+import json
+import os
 
 app = FastAPI(title="Supermercado API", version="1.0")
 
@@ -15,12 +17,40 @@ app.add_middleware(
 )
 
 
-# Estruturas de dados em memória
+# Função para carregar dados do database.json
+def carregar_database():
+    try:
+        database_path = os.path.join(os.path.dirname(__file__), 'database.json')
+        with open(database_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data
+    except FileNotFoundError:
+        print("Arquivo database.json não encontrado. Usando dados vazios.")
+        return {"produtos": [], "usuarios": [], "vendas": [], "carrinhos": {}}
+    except json.JSONDecodeError:
+        print("Erro ao decodificar database.json. Usando dados vazios.")
+        return {"produtos": [], "usuarios": [], "vendas": [], "carrinhos": {}}
 
-produtos: List[dict] = []
-usuarios: List[dict] = []
-vendas: List[dict] = []
-carrinhos: Dict[str, List[dict]] = {}
+# Função para salvar dados no database.json
+def salvar_database(data):
+    try:
+        database_path = os.path.join(os.path.dirname(__file__), 'database.json')
+        with open(database_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"Erro ao salvar database.json: {e}")
+        return False
+
+# Carregar dados iniciais
+db_data = carregar_database()
+
+# Estruturas de dados em memória (carregadas do JSON)
+produtos: List[dict] = db_data.get("produtos", [])
+usuarios: List[dict] = db_data.get("usuarios", [])
+vendas: List[dict] = db_data.get("vendas", [])
+carrinhos: Dict[str, List[dict]] = db_data.get("carrinhos", {})
+vozes: List[dict] = db_data.get("vozes", [])
 
 
 # Entrada de dados
@@ -31,8 +61,8 @@ class ProductIn(BaseModel):
     quantidade: int
 
 class ProductUpdate(BaseModel):
-    novo_preco: float | None = None
-    nova_quantidade: int | None = None
+    novo_preco: Optional[float] = None
+    nova_quantidade: Optional[int] = None
 
 class AddToCartIn(BaseModel):
     produto_nome: str
@@ -40,16 +70,33 @@ class AddToCartIn(BaseModel):
 
 class RemoveFromCartIn(BaseModel):
     produto_nome: str
-    quantidade: int | None = None
+    quantidade: Optional[int] = None
 
 class NewUserIn(BaseModel):
     nome: str
-    nivel_acesso: str | None = "usuario"
+    nivel_acesso: Optional[str] = "usuario"
+
+class VoiceIn(BaseModel):
+    userName: str
+    audioData: str  # Base64 encoded audio
+    recordingTime: int  # Duration in seconds
+    audioFormat: Optional[str] = "audio/wav"
 
 
 # Helpers
 
-def find_product(nome: str) -> dict | None:
+def persistir_dados():
+    """Salva os dados atuais no database.json"""
+    data = {
+        "produtos": produtos,
+        "usuarios": usuarios, 
+        "vendas": vendas,
+        "carrinhos": carrinhos,
+        "vozes": vozes
+    }
+    salvar_database(data)
+
+def find_product(nome: str) -> Optional[dict]:
     return next((p for p in produtos if p["nome"].lower() == nome.lower()), None)
 
 def get_cart(username: str) -> List[dict]:
@@ -82,7 +129,11 @@ def criar_produto(prod: ProductIn):
     if find_product(prod.nome):
         raise HTTPException(status_code=400, detail="Produto já existe")
     produto = prod.dict()
+    # Adicionar ID se não existir
+    if "id" not in produto:
+        produto["id"] = max([p.get("id", 0) for p in produtos], default=0) + 1
     produtos.append(produto)
+    persistir_dados()
     return produto
 
 @app.put("/produtos/{nome_produto}")
@@ -146,8 +197,20 @@ def finalizar_compra(username: str):
     if not cart:
         raise HTTPException(status_code=400, detail="Carrinho vazio")
     total = sum(item["preco"] * item["quantidade"] for item in cart)
-    vendas.append({"usuario": username, "itens": cart.copy(), "total": total})
+    
+    # Criar venda com ID
+    venda_id = max([v.get("id", 0) for v in vendas], default=0) + 1
+    nova_venda = {
+        "id": venda_id,
+        "usuario": username, 
+        "itens": cart.copy(), 
+        "total": total,
+        "data": f"{__import__('datetime').datetime.now().isoformat()}Z"
+    }
+    
+    vendas.append(nova_venda)
     carrinhos[username] = []
+    persistir_dados()
     return {"detail": "Compra finalizada", "total": total}
 
 
@@ -168,3 +231,62 @@ def criar_usuario(payload: NewUserIn):
 @app.get("/vendas")
 def listar_vendas():
     return vendas
+
+# Rotas - Vozes
+
+@app.get("/vozes")
+def listar_vozes():
+    """Lista todas as vozes registradas"""
+    return vozes
+
+@app.get("/vozes/{username}")
+def buscar_voz_usuario(username: str):
+    """Busca a voz de um usuário específico"""
+    voz = next((v for v in vozes if v["userName"].lower() == username.lower()), None)
+    if not voz:
+        raise HTTPException(status_code=404, detail="Voz não encontrada para este usuário")
+    return voz
+
+@app.post("/vozes", status_code=201)
+def salvar_voz(voice: VoiceIn):
+    """Salva ou atualiza a voz de um usuário"""
+    # Verificar se já existe voz para este usuário
+    voz_existente = None
+    for i, v in enumerate(vozes):
+        if v["userName"].lower() == voice.userName.lower():
+            voz_existente = i
+            break
+    
+    # Criar dados da voz
+    dados_voz = {
+        "id": voz_existente + 1 if voz_existente is not None else max([v.get("id", 0) for v in vozes], default=0) + 1,
+        "userName": voice.userName,
+        "audioData": voice.audioData,
+        "recordingTime": voice.recordingTime,
+        "audioFormat": voice.audioFormat,
+        "timestamp": f"{__import__('datetime').datetime.now().isoformat()}Z"
+    }
+    
+    if voz_existente is not None:
+        # Atualizar voz existente
+        dados_voz["id"] = vozes[voz_existente]["id"]
+        vozes[voz_existente] = dados_voz
+        persistir_dados()
+        return {"detail": "Voz atualizada com sucesso", "voz": dados_voz}
+    else:
+        # Criar nova voz
+        vozes.append(dados_voz)
+        persistir_dados()
+        return {"detail": "Voz salva com sucesso", "voz": dados_voz}
+
+@app.delete("/vozes/{username}")
+def deletar_voz(username: str):
+    """Remove a voz de um usuário"""
+    global vozes
+    voz = next((v for v in vozes if v["userName"].lower() == username.lower()), None)
+    if not voz:
+        raise HTTPException(status_code=404, detail="Voz não encontrada para este usuário")
+    
+    vozes = [v for v in vozes if v["userName"].lower() != username.lower()]
+    persistir_dados()
+    return {"detail": "Voz removida com sucesso"}
