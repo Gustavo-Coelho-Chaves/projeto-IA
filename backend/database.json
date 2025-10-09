@@ -1,0 +1,36 @@
+{
+  "produtos": [
+    {
+      "id": 1,
+      "nome": "arroz",
+      "preco": 5.99,
+      "quantidade": 50
+    },
+    {
+      "id": 2,
+      "nome": "feijão",
+      "preco": 4.5,
+      "quantidade": 30
+    },
+    {
+      "id": 3,
+      "nome": "açúcar",
+      "preco": 3.75,
+      "quantidade": 40
+    },
+    {
+      "id": 4,
+      "nome": "café",
+      "preco": 8.99,
+      "quantidade": 25
+    },
+    {
+      "id": 5,
+      "nome": "óleo",
+      "preco": 4.25,
+      "quantidade": 35
+    }
+  ],
+  "usuarios": [],
+  "vendas": []
+}
