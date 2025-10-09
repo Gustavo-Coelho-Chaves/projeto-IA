@@ -26,3 +26,6 @@ Tecnologias
 
 
 python main.py
+
+Para iniciar a API:
+uvicorn api:app --reload

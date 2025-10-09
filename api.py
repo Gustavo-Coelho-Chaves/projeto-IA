@@ -1,9 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Union
 import json
 import os
+import base64
+import tempfile
+import io
 
 app = FastAPI(title="Supermercado API", version="1.0")
 
@@ -81,6 +84,20 @@ class VoiceIn(BaseModel):
     audioData: str  # Base64 encoded audio
     recordingTime: int  # Duration in seconds
     audioFormat: Optional[str] = "audio/wav"
+
+class VoiceCommandIn(BaseModel):
+    audioData: str  # Base64 encoded audio
+    userName: Optional[str] = "usuario_default"
+    audioFormat: Optional[str] = "audio/wav"
+
+class VoiceAuthIn(BaseModel):
+    userName: str
+    audioData: str  # Base64 encoded audio for authentication
+    audioFormat: Optional[str] = "audio/wav"
+
+class TextCommandIn(BaseModel):
+    command: str
+    userName: Optional[str] = "usuario_default"
 
 
 # Helpers
@@ -290,3 +307,227 @@ def deletar_voz(username: str):
     vozes = [v for v in vozes if v["userName"].lower() != username.lower()]
     persistir_dados()
     return {"detail": "Voz removida com sucesso"}
+
+# Rotas - IA e Comandos de Voz
+
+# Função auxiliar para processar áudio base64
+def process_audio_base64(audio_data: str, file_extension: str = ".wav"):
+    """Converte áudio base64 em arquivo temporário"""
+    try:
+        audio_bytes = base64.b64decode(audio_data)
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension)
+        temp_file.write(audio_bytes)
+        temp_file.close()
+        return temp_file.name
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao processar áudio: {e}")
+
+@app.post("/ia/speech-to-text")
+def speech_to_text(voice_data: VoiceCommandIn):
+    """Converte áudio para texto usando IA"""
+    try:
+        # Simulação do reconhecimento de voz (integração real requereria main.py)
+        # Por enquanto, retorna comandos de exemplo baseados no tempo
+        import time
+        import random
+        
+        # Comandos simulados para demonstração
+        sample_commands = [
+            "listar produtos",
+            "adicionar arroz ao carrinho",
+            "mostrar carrinho",
+            "finalizar compra",
+            "cadastrar produto"
+        ]
+        
+        # Simula processamento
+        recognized_text = random.choice(sample_commands)
+        
+        return {
+            "texto_reconhecido": recognized_text,
+            "confianca": 0.85,
+            "usuario": voice_data.userName,
+            "timestamp": f"{__import__('datetime').datetime.now().isoformat()}Z"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro no reconhecimento de voz: {e}")
+
+@app.post("/ia/process-command")
+def process_voice_command(voice_data: VoiceCommandIn):
+    """Processa comando de voz e executa ação correspondente"""
+    try:
+        # Primeiro, converter áudio para texto
+        speech_result = speech_to_text(voice_data)
+        command = speech_result["texto_reconhecido"].lower()
+        username = voice_data.userName
+        
+        # Processar comando baseado em palavras-chave
+        response = {"comando_original": command, "acao_executada": None, "resultado": None}
+        
+        if any(word in command for word in ['listar', 'mostrar', 'ver']) and 'produto' in command:
+            response["acao_executada"] = "listar_produtos"
+            response["resultado"] = produtos
+            
+        elif any(word in command for word in ['adicionar', 'comprar']) and ('carrinho' in command or any(prod['nome'].lower() in command for prod in produtos)):
+            # Identificar produto mencionado
+            produto_encontrado = None
+            for produto in produtos:
+                if produto['nome'].lower() in command:
+                    produto_encontrado = produto
+                    break
+            
+            if produto_encontrado:
+                # Adicionar ao carrinho
+                cart = get_cart(username)
+                cart.append({
+                    "nome": produto_encontrado["nome"], 
+                    "quantidade": 1, 
+                    "preco": produto_encontrado["preco"]
+                })
+                response["acao_executada"] = "adicionar_carrinho"
+                response["resultado"] = {"produto": produto_encontrado["nome"], "carrinho": cart}
+                
+        elif any(word in command for word in ['carrinho', 'meu carrinho']):
+            response["acao_executada"] = "ver_carrinho"
+            response["resultado"] = get_cart(username)
+            
+        elif any(word in command for word in ['finalizar', 'concluir', 'comprar', 'checkout']):
+            cart = get_cart(username)
+            if cart:
+                total = sum(item["preco"] * item["quantidade"] for item in cart)
+                # Criar venda
+                venda_id = max([v.get("id", 0) for v in vendas], default=0) + 1
+                nova_venda = {
+                    "id": venda_id,
+                    "usuario": username,
+                    "itens": cart.copy(),
+                    "total": total,
+                    "data": f"{__import__('datetime').datetime.now().isoformat()}Z"
+                }
+                vendas.append(nova_venda)
+                carrinhos[username] = []
+                persistir_dados()
+                
+                response["acao_executada"] = "finalizar_compra"
+                response["resultado"] = {"total": total, "venda_id": venda_id}
+            else:
+                response["acao_executada"] = "erro"
+                response["resultado"] = "Carrinho vazio"
+        else:
+            response["acao_executada"] = "comando_nao_reconhecido"
+            response["resultado"] = "Comando não foi compreendido"
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao processar comando: {e}")
+
+@app.post("/ia/text-command")
+def process_text_command(text_data: TextCommandIn):
+    """Processa comando de texto (alternativa ao comando de voz)"""
+    try:
+        # Simular o mesmo processamento que o comando de voz
+        voice_data = VoiceCommandIn(
+            audioData="",  # Não usado para texto
+            userName=text_data.userName
+        )
+        
+        # Criar resposta simulada
+        response = {
+            "comando_original": text_data.command,
+            "acao_executada": None,
+            "resultado": None,
+            "texto_reconhecido": text_data.command
+        }
+        
+        command = text_data.command.lower()
+        username = text_data.userName
+        
+        # Usar mesma lógica do processo de voz
+        if any(word in command for word in ['listar', 'mostrar', 'ver']) and 'produto' in command:
+            response["acao_executada"] = "listar_produtos"
+            response["resultado"] = produtos
+            
+        elif any(word in command for word in ['adicionar', 'comprar']) and ('carrinho' in command or any(prod['nome'].lower() in command for prod in produtos)):
+            produto_encontrado = None
+            for produto in produtos:
+                if produto['nome'].lower() in command:
+                    produto_encontrado = produto
+                    break
+            
+            if produto_encontrado:
+                cart = get_cart(username)
+                cart.append({
+                    "nome": produto_encontrado["nome"], 
+                    "quantidade": 1, 
+                    "preco": produto_encontrado["preco"]
+                })
+                response["acao_executada"] = "adicionar_carrinho"
+                response["resultado"] = {"produto": produto_encontrado["nome"], "carrinho": cart}
+                
+        return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao processar comando de texto: {e}")
+
+@app.post("/ia/authenticate-voice")
+def authenticate_voice(auth_data: VoiceAuthIn):
+    """Autentica usuário usando voz (biometria)"""
+    try:
+        # Verificar se usuário tem voz cadastrada
+        voz_usuario = next((v for v in vozes if v["userName"].lower() == auth_data.userName.lower()), None)
+        
+        if not voz_usuario:
+            return {
+                "autenticado": False,
+                "motivo": "Usuário não possui voz cadastrada",
+                "usuario": auth_data.userName
+            }
+        
+        # Simular verificação biométrica
+        # Em implementação real, usaria main.py com GMM
+        import random
+        similarity_score = random.uniform(0.7, 0.95)  # Simulação
+        
+        if similarity_score > 0.8:
+            return {
+                "autenticado": True,
+                "score_similaridade": similarity_score,
+                "usuario": auth_data.userName,
+                "timestamp": f"{__import__('datetime').datetime.now().isoformat()}Z"
+            }
+        else:
+            return {
+                "autenticado": False,
+                "motivo": "Voz não reconhecida",
+                "score_similaridade": similarity_score,
+                "usuario": auth_data.userName
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na autenticação por voz: {e}")
+
+@app.get("/ia/available-commands")
+def get_available_commands():
+    """Retorna lista de comandos disponíveis"""
+    return {
+        "comandos_produtos": [
+            "listar produtos",
+            "mostrar produtos",
+            "ver produtos"
+        ],
+        "comandos_carrinho": [
+            "adicionar [produto] ao carrinho",
+            "comprar [produto]",
+            "ver carrinho",
+            "meu carrinho",
+            "finalizar compra",
+            "concluir compra"
+        ],
+        "comandos_gerais": [
+            "ajuda",
+            "comandos disponíveis"
+        ],
+        "produtos_disponiveis": [p["nome"] for p in produtos]
+    }

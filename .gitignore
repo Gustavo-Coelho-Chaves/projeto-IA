@@ -1,0 +1,67 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+
+# === Virtual Environments ===
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# === PyInstaller ===
+# Arquivos gerados por PyInstaller
+*.manifest
+*.spec
+
+# === Logs e Arquivos Temporários ===
+*.log
+*.pot
+*.tmp
+*.temp
+*.cache
+*.pyc
+*.pyo
+*.pyd
+
+# === Testes ===
+.coverage
+.tox/
+.nox/
+.pytest_cache/
+coverage.xml
+htmlcov/
+nosetests.xml
+
+# === Jupyter / IPython ===
+.ipynb_checkpoints
+*.ipynb_convert.log
+
+# === Distribuição / Build ===
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+MANIFEST
+
+# === Configurações de IDEs ===
+# VSCode
+.vscode/
+# PyCharm / IntelliJ
+.idea/
+# Eclipse / PyDev
+.project
+.pydevproject
+# Outros editores
+*.sublime-project
+*.sublime-workspace
+
+# === Arquivos do sistema ===
+.DS_Store
+Thumbs.db
+
+# === Dependências baixadas manualmente ===
+downloads/
