@@ -67,7 +67,8 @@ def register_voice_sample():
         data = request.json
         username = data.get('username')
         
-        if username not in sessoes_ativas or sessoes_ativos[username]['tipo'] != 'cadastro':
+        # CORREÇÃO: sessoes_ativos -> sessoes_ativas
+        if username not in sessoes_ativas or sessoes_ativas[username]['tipo'] != 'cadastro':
             return jsonify({"success": False, "message": "Sessão inválida"})
         
         # Aqui você enviaria o áudio do frontend
@@ -99,6 +100,10 @@ def login_user():
         if not username:
             return jsonify({"success": False, "message": "Username é obrigatório"})
         
+        # CORREÇÃO: Adicionar verificação se usuário existe
+        if not sistema_voz.user_exists(username):
+            return jsonify({"success": False, "message": "Usuário não encontrado"})
+        
         # Usar o MESMO método de autenticação
         if sistema_voz.authenticate_user(username):
             # Criar sessão ativa
@@ -125,8 +130,7 @@ def login_user():
 def get_products():
     """Retorna lista de produtos"""
     try:
-        # Usar o MESMO método do sistema
-        sistema_voz.list_products_voice()
+        # CORREÇÃO: Não chamar list_products_voice() pois faz síntese de voz
         products = sistema_voz.load_data()['produtos']
         
         return jsonify({
@@ -152,14 +156,16 @@ def process_voice_command():
             return jsonify({"success": False, "message": "Comando vazio"})
         
         # Usar o MESMO processador de comandos
-        result = sistema_voz.handle_voice_command(command_text)
+        # CORREÇÃO: handle_voice_command retorna True/False, vamos adaptar
+        should_continue = sistema_voz.handle_voice_command(command_text)
         
         # Capturar resposta do sistema
         response_data = {
             "success": True,
             "command": command_text,
             "user": username,
-            "response": "Comando processado com sucesso"
+            "response": "Comando processado com sucesso",
+            "continue": should_continue
         }
         
         # Adicionar dados específicos baseados no comando
@@ -179,7 +185,8 @@ def process_voice_command():
             if product_name:
                 sessoes_ativas[username]['carrinho'].append({
                     'produto': product_name,
-                    'quantidade': 1
+                    'quantidade': 1,
+                    'preco': 5.99  # Valor exemplo
                 })
                 response_data['message'] = f"Adicionado {product_name} ao carrinho"
                 response_data['type'] = 'cart_updated'
